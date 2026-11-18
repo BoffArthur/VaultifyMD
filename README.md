@@ -53,13 +53,15 @@ A CLI carrega automaticamente `vaultifymd.toml` no diretório atual. Argumentos 
 - Múltiplos arquivos, pastas, recursão e filtros `--include`/`--exclude`
 - Preservação opcional da árvore de pastas
 - Políticas seguras para existentes: erro, ignorar, sobrescrever, numerar ou hash
-- Seleção de páginas e separador configurável
-- Extração opcional de imagens em PNG/JPG
+- Seleção de páginas; marcador de página `**Página N**` (ou `--page-separator`)
+- Barra de progresso por página no terminal (desativada com `--quiet` ou fora de terminal)
+- Extração opcional de imagens em PNG/JPG, gravadas em `--img-dir` (padrão: `<saída>/att/<nome do PDF>/`) com links `![[...]]` e nomes `<nome>-p<página>-<id>.png`, em que o id reinicia em cada página
 - Wikilinks ou links Markdown
 - Título por nome, metadados do PDF ou primeiro heading
 - Frontmatter, tags e propriedades personalizadas
 - Cópia, incorporação e link para o PDF original
 - Processamento paralelo de 1 a 32 workers
+- Processamento paralelo de páginas dentro de cada PDF com `--page-workers` (1 a 16, padrão 4), dividindo as páginas em lotes de 10
 - `--dry-run`, modo silencioso, verbose, log e resumo JSON
 - Validação para impedir escrita fora do Vault
 - Nomes compatíveis com Windows

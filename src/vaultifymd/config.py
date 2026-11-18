@@ -28,6 +28,7 @@ copy_pdf = false
 embed_pdf = false
 source_link = true
 workers = 2
+page_workers = 4
 '''
 
 

@@ -1,16 +1,22 @@
 from __future__ import annotations
 
+import base64
+import contextlib
 import fnmatch
 import hashlib
+import io
 import json
 import logging
 import re
 import shutil
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import sys
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable, Iterator
+
+PAGE_BATCH = 10
 
 
 @dataclass(frozen=True)
@@ -42,6 +48,7 @@ class Options:
     page_separator: str | None = None
     dry_run: bool = False
     workers: int = 1
+    page_workers: int = 1
 
 
 @dataclass
@@ -133,9 +140,26 @@ def safe_name(value: str) -> str:
     return cleaned or "untitled"
 
 
-def image_dir_path(path: Path) -> Path:
-    # pymupdf4llm replaces spaces with "_" in the image paths it writes, so the directory must use the same name.
-    return Path(str(path).replace(" ", "_"))
+EMBEDDED_IMAGE = re.compile(r"!\[[^\]]*\]\(data:image/(png|jpe?g);base64,([^)]+)\)")
+
+
+def save_embedded_images(markdown: str, attach_dir: Path, page: int, image_format: str, wikilinks: bool) -> tuple[str, int]:
+    count = 0
+
+    def replace(match: re.Match[str]) -> str:
+        nonlocal count
+        count += 1
+        ext = "jpg" if match.group(1) in {"jpg", "jpeg"} else image_format
+        name = f"{attach_dir.name}-p{page:03d}-{count:02d}.{ext}"
+        attach_dir.mkdir(parents=True, exist_ok=True)
+        (attach_dir / name).write_bytes(base64.b64decode(match.group(2)))
+        return f"![[{name}]]" if wikilinks else f"![]({name})"
+
+    return EMBEDDED_IMAGE.sub(replace, markdown), count
+
+
+def clean_page(text: str) -> str:
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
 def yaml_quote(value: str) -> str:
@@ -199,10 +223,44 @@ def build_frontmatter(title: str, pdf: Path, options: Options) -> str:
     return "\n".join(lines)
 
 
-def convert_one(pdf: Path, options: Options, logger: logging.Logger) -> ItemResult:
+def draw_progress(label: str, done: int, total: int) -> None:
+    width = 30
+    filled = round(width * done / total) if total else width
+    name = label if len(label) <= 40 else label[:37] + "..."
+    sys.stderr.write(f"\r{name:<40} [{'#' * filled}{'.' * (width - filled)}] {done}/{total} págs")
+    sys.stderr.flush()
+
+
+@contextlib.contextmanager
+def quiet_library() -> Iterator[io.StringIO]:
+    import pymupdf
+    captured = io.StringIO()
+    pymupdf.set_messages(stream=captured)
+    try:
+        with contextlib.redirect_stdout(captured):
+            yield captured
+    finally:
+        pymupdf.set_messages(stream=sys.stdout)
+
+
+def render_pages(pages: list[int], pdf: str, embed_images: bool, image_format: str, dpi: int,
+                 size_limit: float) -> tuple[list[tuple[int, str]], str]:
+    import pymupdf4llm
+    kwargs: dict[str, object] = {"pages": pages, "page_chunks": True, "write_images": False,
+                                 "embed_images": embed_images}
+    if embed_images:
+        kwargs.update(image_format=image_format, dpi=dpi, image_size_limit=size_limit)
+    with quiet_library() as messages:
+        chunks = pymupdf4llm.to_markdown(pdf, **kwargs)
+        rows = [(page, chunk["text"]) for page, chunk in zip(pages, chunks)]
+    return rows, messages.getvalue().strip()
+
+
+def convert_one(pdf: Path, options: Options, logger: logging.Logger,
+                progress: Callable[[int, int], None] | None = None) -> ItemResult:
     rel_dir = relative_note_dir(pdf, options)
     out_dir = options.output_dir / rel_dir
-    attach_dir = image_dir_path(options.attachments_dir / rel_dir / safe_name(pdf.stem))
+    attach_dir = options.attachments_dir / rel_dir / safe_name(pdf.stem)
     note_path = out_dir / f"{safe_name(pdf.stem)}.md"
     policy = "overwrite" if options.overwrite else "skip" if options.skip_existing else options.collision
     note_path = unique_note_path(note_path, pdf, policy)
@@ -217,23 +275,50 @@ def convert_one(pdf: Path, options: Options, logger: logging.Logger) -> ItemResu
         return ItemResult(str(pdf), str(note_path), "converted", message="dry-run")
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    if not options.no_images:
-        attach_dir.mkdir(parents=True, exist_ok=True)
 
-    import pymupdf4llm
-    kwargs: dict[str, object] = {"write_images": not options.no_images}
-    if not options.no_images:
-        kwargs.update(image_path=str(attach_dir), image_format=options.image_format,
-                      dpi=options.dpi, image_size_limit=options.size_limit)
-    if options.pages is not None:
-        kwargs["pages"] = list(options.pages)
-    if options.page_separator is not None:
-        kwargs["page_separators"] = True
+    import pymupdf
+    with pymupdf.open(pdf) as doc:
+        page_count = doc.page_count
+    pages = list(options.pages) if options.pages is not None else list(range(page_count))
 
-    before = set(attach_dir.glob("*")) if attach_dir.exists() else set()
-    markdown = pymupdf4llm.to_markdown(str(pdf), **kwargs)
-    if options.page_separator:
-        markdown = markdown.replace("-----\n", f"\n{options.page_separator}\n")
+    batches = [pages[start:start + PAGE_BATCH] for start in range(0, len(pages), PAGE_BATCH)]
+    rendered: dict[int, str] = {}
+    library_messages: list[str] = []
+    done = 0
+
+    def collect(batch: list[int], result: tuple[list[tuple[int, str]], str]) -> None:
+        nonlocal done
+        rows, messages = result
+        rendered.update(rows)
+        if messages:
+            library_messages.append(messages)
+        done += len(batch)
+        if progress:
+            progress(done, len(pages))
+
+    args = (str(pdf), not options.no_images, options.image_format, options.dpi, options.size_limit)
+    if options.page_workers > 1 and len(batches) > 1:
+        with ProcessPoolExecutor(max_workers=min(options.page_workers, len(batches))) as executor:
+            futures = {executor.submit(render_pages, batch, *args): batch for batch in batches}
+            for future in as_completed(futures):
+                collect(futures[future], future.result())
+    else:
+        for batch in batches:
+            collect(batch, render_pages(batch, *args))
+
+    parts: list[str] = []
+    images = 0
+    for page in pages:
+        text = clean_page(rendered[page])
+        if not options.no_images:
+            text, page_images = save_embedded_images(text, attach_dir, page + 1, options.image_format, options.wikilinks)
+            images += page_images
+        marker = options.page_separator or f"**Página {page + 1}**"
+        parts.append(f"{marker}\n\n{text}" if text else marker)
+    if library_messages:
+        logger.debug("Mensagens da biblioteca: %s", "\n".join(library_messages))
+
+    markdown = "\n\n".join(parts)
     if options.wikilinks:
         markdown = obsidian_links(markdown)
 
@@ -244,6 +329,7 @@ def convert_one(pdf: Path, options: Options, logger: logging.Logger) -> ItemResu
     if options.source_link:
         sections.append(f"[Abrir PDF de origem]({pdf.as_uri()})\n")
     if options.copy_pdf:
+        attach_dir.mkdir(parents=True, exist_ok=True)
         pdf_target = attach_dir / pdf.name
         shutil.copy2(pdf, pdf_target)
         if options.embed_pdf:
@@ -252,20 +338,28 @@ def convert_one(pdf: Path, options: Options, logger: logging.Logger) -> ItemResu
         sections.append(f"![[{pdf.name}]]\n")
     sections.append(markdown.lstrip())
     note_path.write_text("\n".join(sections), encoding="utf-8", newline="\n")
-    images = len(set(attach_dir.glob("*")) - before) if attach_dir.exists() else 0
     logger.debug("Nota criada: %s", note_path)
     return ItemResult(str(pdf), str(note_path), "converted", images)
 
 
-def convert_many(pdfs: list[Path], options: Options, logger: logging.Logger) -> Summary:
+def convert_many(pdfs: list[Path], options: Options, logger: logging.Logger, progress: bool = False) -> Summary:
     summary = Summary()
+    show = progress and options.workers == 1
+
     def run(pdf: Path) -> ItemResult:
+        callback = None
+        if show:
+            def callback(done: int, total: int) -> None:
+                draw_progress(pdf.name, done, total)
         try:
-            return convert_one(pdf, options, logger)
+            return convert_one(pdf, options, logger, callback)
         except Exception as exc:
             logger.debug("Falha detalhada em %s", pdf, exc_info=True)
             return ItemResult(str(pdf), status="failed", message=str(exc))
-
+        finally:
+            if show:
+                sys.stderr.write("\n")
+                sys.stderr.flush()
     if options.workers == 1:
         results = map(run, pdfs)
     else:
