@@ -16,8 +16,8 @@ def test_safe_name(): assert safe_name('a:b?c') == "a_b_c"
 def test_embedded_images_are_written_to_dir_with_spaces(tmp_path: Path):
     attach = tmp_path / "pasta com espaco" / "Meu Livro"
     image = f"![](data:image/png;base64,{PNG_1PX})"
-    markdown, count = save_embedded_images(f"{image}\n{image}", attach, 7, "png", True)
-    assert markdown == "![[Meu Livro-p007-01.png]]\n![[Meu Livro-p007-02.png]]"
+    markdown, count = save_embedded_images(f"{image}\n{image}", attach, 7, "png", True, "att/pasta com espaco/Meu Livro")
+    assert markdown == "![[att/pasta com espaco/Meu Livro/Meu Livro-p007-01.png]]\n![[att/pasta com espaco/Meu Livro/Meu Livro-p007-02.png]]"
     assert count == 2
     assert (attach / "Meu Livro-p007-02.png").read_bytes()[:4] == b"\x89PNG"
     _, next_page_count = save_embedded_images(image, attach, 8, "png", True)
