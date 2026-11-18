@@ -99,8 +99,8 @@ def main(argv: list[str] | None = None) -> int:
         cfg = load(args.config)
         vault_raw = choose(args, cfg, "vault")
         vault = Path(vault_raw).expanduser().resolve() if vault_raw else None
-        output = path_inside(vault, Path(choose(args, cfg, "output", "saida_obsidian")), "--output")
-        attach_default = Path(choose(args, cfg, "output", "saida_obsidian")) / "anexos"
+        output = path_inside(vault, Path(choose(args, cfg, "output", "vaultifymd")), "--output")
+        attach_default = Path(choose(args, cfg, "output", "vaultifymd")) / "anexos"
         attachments = path_inside(vault, Path(choose(args, cfg, "attachments_dir", attach_default)), "--attachments-dir")
         dpi = int(choose(args, cfg, "dpi", 150)); size = float(choose(args, cfg, "size_limit", 0.05))
         workers = int(choose(args, cfg, "workers", 1))

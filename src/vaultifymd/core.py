@@ -133,6 +133,11 @@ def safe_name(value: str) -> str:
     return cleaned or "untitled"
 
 
+def image_dir_path(path: Path) -> Path:
+    # pymupdf4llm replaces spaces with "_" in the image paths it writes, so the directory must use the same name.
+    return Path(str(path).replace(" ", "_"))
+
+
 def yaml_quote(value: str) -> str:
     return json.dumps(value, ensure_ascii=False)
 
@@ -197,7 +202,7 @@ def build_frontmatter(title: str, pdf: Path, options: Options) -> str:
 def convert_one(pdf: Path, options: Options, logger: logging.Logger) -> ItemResult:
     rel_dir = relative_note_dir(pdf, options)
     out_dir = options.output_dir / rel_dir
-    attach_dir = options.attachments_dir / rel_dir / safe_name(pdf.stem)
+    attach_dir = image_dir_path(options.attachments_dir / rel_dir / safe_name(pdf.stem))
     note_path = out_dir / f"{safe_name(pdf.stem)}.md"
     policy = "overwrite" if options.overwrite else "skip" if options.skip_existing else options.collision
     note_path = unique_note_path(note_path, pdf, policy)
