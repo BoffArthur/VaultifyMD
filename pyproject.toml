@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vaultifymd"
+version = "0.2.1"
+description = "Convert PDF documents into clean, Obsidian-ready Markdown vault notes."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Boff Arthur" }]
+keywords = ["pdf", "markdown", "obsidian", "cli", "pymupdf"]
+dependencies = ["pymupdf>=2.1", "pymupdf4llm>=2.1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.8", "build>=1.2"]
+
+[project.scripts]
+vaultifymd = "vaultifymd.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vaultifymd"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
