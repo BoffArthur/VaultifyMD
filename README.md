@@ -2,6 +2,12 @@
 
 Converte PDFs em Markdown pronto para Obsidian, com imagens, Wikilinks, frontmatter, processamento em lote e configuração TOML.
 
+## Versão 0.3.0
+
+- Flags booleanas com `--X/--no-X` (`--images`, `--wikilinks`, etc.) substituem `--no-images` e a configuração `no_images` (agora `images = true` no TOML; `no_images` ainda é lido).
+- `--collision` aceita `update`: regenera a nota somente se o PDF for mais novo que a nota (`source_modified` do frontmatter, ou mtime da nota quando não há frontmatter).
+- `--collision`, `--overwrite` e `--skip-existing` são mutuamente exclusivos; `--overwrite` e `--skip-existing` são aliases ocultos mantidos por compatibilidade. A configuração `overwrite`/`skip_existing` ainda é lida como fallback.
+
 ## Versão 0.2.2
 
 - Anexos em `<saída>/<nome do arquivo>/` e wikilinks `![[<nome do arquivo>/<imagem>]]`, com o Markdown direto na saída.
@@ -37,7 +43,7 @@ As versões testadas do runtime estão em `requirements.txt`; as dependências d
 ```powershell
 vaultifymd manual.pdf
 vaultifymd C:\PDFs --recursive --vault D:\Obsidian --output "Notas/PDF"
-vaultifymd C:\PDFs -r --preserve-tree --skip-existing --workers 4
+vaultifymd C:\PDFs -r --preserve-tree --collision skip --workers 4
 vaultifymd manual.pdf --pages "1-5,8" --frontmatter --tags "pdf,engenharia"
 vaultifymd C:\PDFs -r --include "*manual*" --exclude "*/Archive/*" --dry-run
 vaultifymd C:\PDFs -r --json --quiet > resultado.json
@@ -57,7 +63,8 @@ A CLI carrega automaticamente `vaultifymd.toml` no diretório atual. Argumentos 
 - Arquivo TOML persistente e gerador `--init-config`
 - Múltiplos arquivos, pastas, recursão e filtros `--include`/`--exclude`
 - Preservação opcional da árvore de pastas
-- Política para notas existentes (`--collision`): ignorar (padrão), sobrescrever ou duplicar com sufixo numérico (`-2`, `-3`...); a pasta de anexos acompanha o nome final da nota
+- Política para notas existentes (`--collision`): ignorar (padrão), sobrescrever, duplicar com sufixo numérico (`-2`, `-3`...) ou atualizar somente se o PDF for mais novo (`update`); a pasta de anexos acompanha o nome final da nota
+- Extração de imagens ligada por padrão; desative com `--no-images`
 - Seleção de páginas; marcador de página `**Página N**` (ou `--page-separator`)
 - Barra de progresso por página no terminal (desativada com `--quiet` ou fora de terminal)
 - Extração opcional de imagens em PNG/JPG, gravadas em `--img-dir` (padrão: `<saída>/<nome do PDF>/`) com links `![[<nome do PDF>/<nome>-p<página>-<id>.png]]` e nomes `<nome>-p<página>-<id>.png`, em que o id reinicia em cada página

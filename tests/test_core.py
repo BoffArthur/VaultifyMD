@@ -47,6 +47,22 @@ def test_parallel_pages_match_sequential(tmp_path: Path, monkeypatch):
         notes.append(Path(convert_one(pdf, options, logging.getLogger("test")).note).read_text(encoding="utf-8"))
     assert notes[0] == notes[1]
     assert "**Página 4**" in notes[1]
+def test_collision_update_skips_only_when_note_is_newer_than_pdf(tmp_path: Path):
+    import os
+    import pymupdf
+    pdf = tmp_path / "Livro.pdf"
+    with pymupdf.open() as doc:
+        doc.new_page().insert_text((72, 72), "Texto")
+        doc.save(pdf)
+    out = tmp_path / "out"
+    logger = logging.getLogger("test")
+    options = Options(output_dir=out, attachments_dir=out, frontmatter=True, no_images=True, collision="update")
+    assert convert_one(pdf, options, logger).status == "converted"
+    assert convert_one(pdf, options, logger).status == "skipped"
+    newer = pdf.stat().st_mtime + 60
+    os.utime(pdf, (newer, newer))
+    assert convert_one(pdf, options, logger).status == "converted"
+
 def test_collision_duplicate_moves_attachments_with_note(tmp_path: Path):
     import pymupdf
     pdf = tmp_path / "Livro.pdf"

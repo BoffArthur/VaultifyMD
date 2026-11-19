@@ -25,14 +25,15 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--include", action="append", help="Glob incluído; repetível")
     p.add_argument("--exclude", action="append", help="Glob excluído; repetível")
     policy = p.add_mutually_exclusive_group()
-    policy.add_argument("--overwrite", action="store_true", default=None)
-    policy.add_argument("--skip-existing", action="store_true", default=None)
-    p.add_argument("--collision", choices=["skip", "overwrite", "duplicate"], help="Nota existente: ignorar, sobrescrever ou duplicar (sufixo -2, -3...)")
+    policy.add_argument("--collision", choices=["skip", "overwrite", "duplicate", "update"],
+                        help="Nota existente: ignorar, sobrescrever, duplicar (sufixo -2, -3...) ou atualizar se o PDF for mais novo")
+    policy.add_argument("--overwrite", dest="collision", action="store_const", const="overwrite", help=argparse.SUPPRESS)
+    policy.add_argument("--skip-existing", dest="collision", action="store_const", const="skip", help=argparse.SUPPRESS)
     p.add_argument("--pages")
     p.add_argument("--dpi", type=int)
     p.add_argument("--size-limit", type=float)
     p.add_argument("--image-format", choices=["png", "jpg"])
-    p.add_argument("--no-images", dest="no_images", action="store_true", default=None)
+    p.add_argument("--images", action=argparse.BooleanOptionalAction, default=None, help="Extrai imagens dos PDFs (padrão: sim)")
     p.add_argument("--wikilinks", action=argparse.BooleanOptionalAction, default=None)
     p.add_argument("--frontmatter", action=argparse.BooleanOptionalAction, default=None)
     p.add_argument("--tags", help="Tags separadas por vírgula")
@@ -120,15 +121,14 @@ def main(argv: list[str] | None = None) -> int:
             recursive=bool(choose(args, cfg, "recursive", False)), preserve_tree=bool(choose(args, cfg, "preserve_tree", False)),
             include=tuple(args.include or cfg.get("include", ["*.pdf"])), exclude=tuple(args.exclude or cfg.get("exclude", [])),
             pages=parse_pages(choose(args, cfg, "pages")), dpi=dpi, size_limit=size,
-            image_format=choose(args, cfg, "image_format", "png"), no_images=bool(choose(args, cfg, "no_images", False)),
-            wikilinks=bool(choose(args, cfg, "wikilinks", True)), overwrite=bool(choose(args, cfg, "overwrite", False)),
-            skip_existing=bool(choose(args, cfg, "skip_existing", False)), collision=choose(args, cfg, "collision", "skip"),
+            image_format=choose(args, cfg, "image_format", "png"), no_images=not bool(choose(args, cfg, "images", not cfg.get("no_images", False))),
+            wikilinks=bool(choose(args, cfg, "wikilinks", True)),
+            collision=choose(args, cfg, "collision", "overwrite" if cfg.get("overwrite") else "skip"),
             frontmatter=bool(choose(args, cfg, "frontmatter", True) or tags or args.property), tags=tags,
             properties=parse_properties(args.property), title_from=choose(args, cfg, "title_from", "filename"),
             copy_pdf=bool(choose(args, cfg, "copy_pdf", False)), embed_pdf=bool(choose(args, cfg, "embed_pdf", False)),
             source_link=bool(choose(args, cfg, "source_link", False)), page_separator=choose(args, cfg, "page_separator"),
             dry_run=bool(choose(args, cfg, "dry_run", False)), workers=workers, page_workers=page_workers)
-        if options.overwrite and options.skip_existing: raise ValueError("overwrite e skip-existing são incompatíveis.")
         pdfs = discover(inputs, options.recursive, options.include, options.exclude)
         if not pdfs: raise ValueError("Nenhum PDF encontrado.")
     except Exception as exc:

@@ -34,8 +34,6 @@ class Options:
     image_format: str = "png"
     no_images: bool = False
     wikilinks: bool = True
-    overwrite: bool = False
-    skip_existing: bool = False
     collision: str = "skip"
     frontmatter: bool = False
     tags: tuple[str, ...] = ()
@@ -206,6 +204,15 @@ def unique_note_path(base: Path, collision: str) -> Path:
         index += 1
 
 
+def note_is_current(pdf: Path, note: Path) -> bool:
+    pdf_mtime = datetime.fromtimestamp(pdf.stat().st_mtime).astimezone().replace(microsecond=0)
+    head = note.read_text(encoding="utf-8", errors="ignore")[:4096]
+    match = re.search(r'^source_modified: "([^"]+)"', head, re.MULTILINE)
+    if match:
+        return datetime.fromisoformat(match.group(1)) >= pdf_mtime
+    return note.stat().st_mtime >= pdf.stat().st_mtime
+
+
 def build_frontmatter(title: str, pdf: Path, options: Options) -> str:
     modified = datetime.fromtimestamp(pdf.stat().st_mtime).astimezone().isoformat(timespec="seconds")
     lines = ["---", f"title: {yaml_quote(title)}", f"source: {yaml_quote(str(pdf))}",
@@ -257,12 +264,14 @@ def convert_one(pdf: Path, options: Options, logger: logging.Logger,
     rel_dir = relative_note_dir(pdf, options)
     out_dir = options.output_dir / rel_dir
     note_path = out_dir / f"{safe_name(pdf.stem)}.md"
-    policy = "overwrite" if options.overwrite else "skip" if options.skip_existing else options.collision
+    policy = options.collision
     note_path = unique_note_path(note_path, policy)
     attach_dir = options.attachments_dir / rel_dir / note_path.stem
 
     if note_path.exists() and policy == "skip":
         return ItemResult(str(pdf), str(note_path), "skipped", message="Nota existente")
+    if note_path.exists() and policy == "update" and note_is_current(pdf, note_path):
+        return ItemResult(str(pdf), str(note_path), "skipped", message="Nota atualizada")
 
     if options.dry_run:
         return ItemResult(str(pdf), str(note_path), "converted", message="dry-run")
