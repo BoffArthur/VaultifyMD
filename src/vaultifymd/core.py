@@ -143,8 +143,7 @@ def safe_name(value: str) -> str:
 EMBEDDED_IMAGE = re.compile(r"!\[[^\]]*\]\(data:image/(png|jpe?g);base64,([^)]+)\)")
 
 
-def save_embedded_images(markdown: str, attach_dir: Path, page: int, image_format: str, wikilinks: bool,
-                         link_prefix: str = "") -> tuple[str, int]:
+def save_embedded_images(markdown: str, attach_dir: Path, page: int, image_format: str, wikilinks: bool) -> tuple[str, int]:
     count = 0
 
     def replace(match: re.Match[str]) -> str:
@@ -154,17 +153,9 @@ def save_embedded_images(markdown: str, attach_dir: Path, page: int, image_forma
         name = f"{attach_dir.name}-p{page:03d}-{count:02d}.{ext}"
         attach_dir.mkdir(parents=True, exist_ok=True)
         (attach_dir / name).write_bytes(base64.b64decode(match.group(2)))
-        return f"![[{link_prefix}/{name}]]" if wikilinks and link_prefix else f"![[{name}]]" if wikilinks else f"![]({name})"
+        return f"![[{attach_dir.name}/{name}]]" if wikilinks else f"![]({name})"
 
     return EMBEDDED_IMAGE.sub(replace, markdown), count
-
-
-def attach_link_prefix(attach_dir: Path, options: Options) -> str:
-    base = options.vault or Path.cwd()
-    try:
-        return attach_dir.relative_to(base).as_posix()
-    except ValueError:
-        return attach_dir.as_posix()
 
 
 def clean_page(text: str) -> str:
@@ -315,13 +306,12 @@ def convert_one(pdf: Path, options: Options, logger: logging.Logger,
         for batch in batches:
             collect(batch, render_pages(batch, *args))
 
-    link_prefix = attach_link_prefix(attach_dir, options)
     parts: list[str] = []
     images = 0
     for page in pages:
         text = clean_page(rendered[page])
         if not options.no_images:
-            text, page_images = save_embedded_images(text, attach_dir, page + 1, options.image_format, options.wikilinks, link_prefix)
+            text, page_images = save_embedded_images(text, attach_dir, page + 1, options.image_format, options.wikilinks)
             images += page_images
         marker = options.page_separator or f"**Página {page + 1}**"
         parts.append(f"{marker}\n\n{text}" if text else marker)
