@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import contextlib
 import fnmatch
-import hashlib
 import io
 import json
 import logging
@@ -37,7 +36,7 @@ class Options:
     wikilinks: bool = True
     overwrite: bool = False
     skip_existing: bool = False
-    collision: str = "error"
+    collision: str = "skip"
     frontmatter: bool = False
     tags: tuple[str, ...] = ()
     properties: tuple[tuple[str, str], ...] = ()
@@ -196,12 +195,9 @@ def relative_note_dir(pdf: Path, options: Options) -> Path:
         return Path()
 
 
-def unique_note_path(base: Path, pdf: Path, collision: str) -> Path:
-    if not base.exists() or collision in {"error", "overwrite", "skip"}:
+def unique_note_path(base: Path, collision: str) -> Path:
+    if not base.exists() or collision != "duplicate":
         return base
-    if collision == "hash":
-        token = hashlib.sha1(str(pdf).encode("utf-8")).hexdigest()[:8]
-        return base.with_name(f"{base.stem}-{token}{base.suffix}")
     index = 2
     while True:
         candidate = base.with_name(f"{base.stem}-{index}{base.suffix}")
@@ -260,16 +256,13 @@ def convert_one(pdf: Path, options: Options, logger: logging.Logger,
                 progress: Callable[[int, int], None] | None = None) -> ItemResult:
     rel_dir = relative_note_dir(pdf, options)
     out_dir = options.output_dir / rel_dir
-    attach_dir = options.attachments_dir / rel_dir / safe_name(pdf.stem)
     note_path = out_dir / f"{safe_name(pdf.stem)}.md"
     policy = "overwrite" if options.overwrite else "skip" if options.skip_existing else options.collision
-    note_path = unique_note_path(note_path, pdf, policy)
+    note_path = unique_note_path(note_path, policy)
+    attach_dir = options.attachments_dir / rel_dir / note_path.stem
 
-    if note_path.exists():
-        if policy == "skip":
-            return ItemResult(str(pdf), str(note_path), "skipped", message="Nota existente")
-        if policy != "overwrite":
-            raise FileExistsError(f"Nota existente: {note_path}")
+    if note_path.exists() and policy == "skip":
+        return ItemResult(str(pdf), str(note_path), "skipped", message="Nota existente")
 
     if options.dry_run:
         return ItemResult(str(pdf), str(note_path), "converted", message="dry-run")

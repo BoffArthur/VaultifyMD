@@ -47,3 +47,18 @@ def test_parallel_pages_match_sequential(tmp_path: Path, monkeypatch):
         notes.append(Path(convert_one(pdf, options, logging.getLogger("test")).note).read_text(encoding="utf-8"))
     assert notes[0] == notes[1]
     assert "**Página 4**" in notes[1]
+def test_collision_duplicate_moves_attachments_with_note(tmp_path: Path):
+    import pymupdf
+    pdf = tmp_path / "Livro.pdf"
+    with pymupdf.open() as doc:
+        page = doc.new_page()
+        page.insert_image(pymupdf.Rect(72, 100, 372, 400), pixmap=pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 50, 50), 1))
+        doc.save(pdf)
+    out = tmp_path / "out"
+    logger = logging.getLogger("test")
+    assert convert_one(pdf, Options(output_dir=out, attachments_dir=out), logger).status == "converted"
+    assert convert_one(pdf, Options(output_dir=out, attachments_dir=out), logger).status == "skipped"
+    second = convert_one(pdf, Options(output_dir=out, attachments_dir=out, collision="duplicate"), logger)
+    assert Path(second.note).name == "Livro-2.md"
+    assert (out / "Livro-2" / "Livro-2-p001-01.png").exists()
+    assert "![[Livro-2/Livro-2-p001-01.png]]" in Path(second.note).read_text(encoding="utf-8")

@@ -27,7 +27,7 @@ def parser() -> argparse.ArgumentParser:
     policy = p.add_mutually_exclusive_group()
     policy.add_argument("--overwrite", action="store_true", default=None)
     policy.add_argument("--skip-existing", action="store_true", default=None)
-    p.add_argument("--collision", choices=["error", "number", "hash"])
+    p.add_argument("--collision", choices=["skip", "overwrite", "duplicate"], help="Nota existente: ignorar, sobrescrever ou duplicar (sufixo -2, -3...)")
     p.add_argument("--pages")
     p.add_argument("--dpi", type=int)
     p.add_argument("--size-limit", type=float)
@@ -122,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
             pages=parse_pages(choose(args, cfg, "pages")), dpi=dpi, size_limit=size,
             image_format=choose(args, cfg, "image_format", "png"), no_images=bool(choose(args, cfg, "no_images", False)),
             wikilinks=bool(choose(args, cfg, "wikilinks", True)), overwrite=bool(choose(args, cfg, "overwrite", False)),
-            skip_existing=bool(choose(args, cfg, "skip_existing", False)), collision=choose(args, cfg, "collision", "error"),
+            skip_existing=bool(choose(args, cfg, "skip_existing", False)), collision=choose(args, cfg, "collision", "skip"),
             frontmatter=bool(choose(args, cfg, "frontmatter", True) or tags or args.property), tags=tags,
             properties=parse_properties(args.property), title_from=choose(args, cfg, "title_from", "filename"),
             copy_pdf=bool(choose(args, cfg, "copy_pdf", False)), embed_pdf=bool(choose(args, cfg, "embed_pdf", False)),

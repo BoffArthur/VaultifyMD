@@ -52,7 +52,7 @@ A CLI carrega automaticamente `vaultifymd.toml` no diretório atual. Argumentos 
 - Arquivo TOML persistente e gerador `--init-config`
 - Múltiplos arquivos, pastas, recursão e filtros `--include`/`--exclude`
 - Preservação opcional da árvore de pastas
-- Políticas seguras para existentes: erro, ignorar, sobrescrever, numerar ou hash
+- Política para notas existentes (`--collision`): ignorar (padrão), sobrescrever ou duplicar com sufixo numérico (`-2`, `-3`...); a pasta de anexos acompanha o nome final da nota
 - Seleção de páginas; marcador de página `**Página N**` (ou `--page-separator`)
 - Barra de progresso por página no terminal (desativada com `--quiet` ou fora de terminal)
 - Extração opcional de imagens em PNG/JPG, gravadas em `--img-dir` (padrão: `<saída>/<nome do PDF>/`) com links `![[<nome do PDF>/<nome>-p<página>-<id>.png]]` e nomes `<nome>-p<página>-<id>.png`, em que o id reinicia em cada página
