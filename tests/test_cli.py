@@ -5,7 +5,7 @@ from vaultifymd.cli import parser, path_inside
 from vaultifymd.config import init, load
 
 
-def test_version(): assert __version__ == "0.2.1"
+def test_version(): assert __version__ == "0.2.2"
 def test_negative_flags_parse():
     args = parser().parse_args(["manual.pdf", "--no-images", "--no-wikilinks"])
     assert args.no_images is True and args.wikilinks is False
