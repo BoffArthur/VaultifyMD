@@ -2,6 +2,10 @@
 
 Converte PDFs em Markdown pronto para Obsidian, com imagens, Wikilinks, frontmatter, processamento em lote e configuração TOML.
 
+## Versão 0.4.0
+
+- Nova opção `--update`: consulta a última release publicada no GitHub e instala com `pip` somente se for mais nova que a versão instalada. Requer que a release exista (tag `vX.Y.Z`).
+
 ## Versão 0.3.0
 
 - Flags booleanas com `--X/--no-X` (`--images`, `--wikilinks`, etc.) substituem `--no-images` e a configuração `no_images` (agora `images = true` no TOML; `no_images` ainda é lido).
@@ -47,6 +51,7 @@ vaultifymd C:\PDFs -r --preserve-tree --collision skip --workers 4
 vaultifymd manual.pdf --pages "1-5,8" --frontmatter --tags "pdf,engenharia"
 vaultifymd C:\PDFs -r --include "*manual*" --exclude "*/Archive/*" --dry-run
 vaultifymd C:\PDFs -r --json --quiet > resultado.json
+vaultifymd --update
 ```
 
 ## Configuração persistente

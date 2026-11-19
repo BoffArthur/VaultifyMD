@@ -8,6 +8,7 @@ from pathlib import Path
 from . import __version__
 from .config import DEFAULT_NAME, init as init_config, load
 from .core import Options, convert_many, discover, parse_pages, parse_properties
+from .updater import run_update
 
 
 def parser() -> argparse.ArgumentParser:
@@ -75,6 +76,7 @@ def parser() -> argparse.ArgumentParser:
     execucao.add_argument("--log-file", type=Path, metavar="ARQUIVO", help="grava log em arquivo")
     execucao.add_argument("--json", action="store_true", help="emite resumo em JSON")
     execucao.add_argument("--version", action="version", version=f"%(prog)s {__version__}", help="mostra a versão e encerra")
+    execucao.add_argument("--update", action="store_true", help="instala a última release do GitHub, se for mais nova, e encerra")
 
     configuracao = p.add_argument_group("Configuração")
     configuracao.add_argument("--init-config", nargs="?", const=DEFAULT_NAME, metavar="ARQUIVO",
@@ -117,6 +119,8 @@ def logger_for(args) -> logging.Logger:
 
 def main(argv: list[str] | None = None) -> int:
     p = parser(); args = p.parse_args(argv)
+    if args.update:
+        return run_update()
     if args.init_config:
         try:
             init_config(Path(args.init_config), args.force)
