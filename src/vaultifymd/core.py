@@ -33,6 +33,7 @@ class Options:
     size_limit: float = 0.05
     image_format: str = "png"
     no_images: bool = False
+    image_text: bool = False
     wikilinks: bool = True
     collision: str = "skip"
     frontmatter: bool = False
@@ -247,10 +248,10 @@ def quiet_library() -> Iterator[io.StringIO]:
 
 
 def render_pages(pages: list[int], pdf: str, embed_images: bool, image_format: str, dpi: int,
-                 size_limit: float) -> tuple[list[tuple[int, str]], str]:
+                 size_limit: float, image_text: bool = False) -> tuple[list[tuple[int, str]], str]:
     import pymupdf4llm
     kwargs: dict[str, object] = {"pages": pages, "page_chunks": True, "write_images": False,
-                                 "embed_images": embed_images}
+                                 "embed_images": embed_images, "force_text": image_text}
     if embed_images:
         kwargs.update(image_format=image_format, dpi=dpi, image_size_limit=size_limit)
     with quiet_library() as messages:
@@ -298,7 +299,7 @@ def convert_one(pdf: Path, options: Options, logger: logging.Logger,
         if progress:
             progress(done, len(pages))
 
-    args = (str(pdf), not options.no_images, options.image_format, options.dpi, options.size_limit)
+    args = (str(pdf), not options.no_images, options.image_format, options.dpi, options.size_limit, options.image_text)
     if options.page_workers > 1 and len(batches) > 1:
         with ProcessPoolExecutor(max_workers=min(options.page_workers, len(batches))) as executor:
             futures = {executor.submit(render_pages, batch, *args): batch for batch in batches}

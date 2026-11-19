@@ -2,6 +2,10 @@
 
 Converte PDFs em Markdown pronto para Obsidian, com imagens, Wikilinks, frontmatter, processamento em lote e configuração TOML.
 
+## Versão 0.4.1
+
+- Nova opção `--image-text` (`image_text = true` no TOML): inclui o texto de dentro de figuras e diagramas no Markdown, como os blocos `picture text`. Desligada por padrão, porque esse texto pode sair fora de ordem em diagramas com cotas. O texto vem do próprio PDF (não é OCR); sem a opção, ele é omitido.
+
 ## Versão 0.4.0
 
 - Nova opção `--update`: consulta a última release publicada no GitHub e instala com `pip` somente se for mais nova que a versão instalada. Requer que a release exista (tag `vX.Y.Z`).

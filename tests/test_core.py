@@ -47,6 +47,16 @@ def test_parallel_pages_match_sequential(tmp_path: Path, monkeypatch):
         notes.append(Path(convert_one(pdf, options, logging.getLogger("test")).note).read_text(encoding="utf-8"))
     assert notes[0] == notes[1]
     assert "**Página 4**" in notes[1]
+@pytest.mark.parametrize(("image_text", "expected"), [(False, False), (True, True)])
+def test_image_text_controls_force_text(monkeypatch, image_text, expected):
+    import pymupdf4llm
+    seen = {}
+    def fake_to_markdown(pdf, **kwargs):
+        seen.update(kwargs)
+        return [{"text": ""}]
+    monkeypatch.setattr(pymupdf4llm, "to_markdown", fake_to_markdown)
+    core.render_pages([0], "doc.pdf", False, "png", 150, 0.05, image_text)
+    assert seen["force_text"] is expected
 def test_collision_update_skips_only_when_note_is_newer_than_pdf(tmp_path: Path):
     import os
     import pymupdf

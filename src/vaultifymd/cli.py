@@ -49,6 +49,8 @@ def parser() -> argparse.ArgumentParser:
     conversao.add_argument("--size-limit", type=float, metavar="F", help="tamanho mínimo de imagem como fração da página (0–1, padrão: 0.05)")
     conversao.add_argument("--image-format", choices=["png", "jpg"], help="formato das imagens extraídas")
     conversao.add_argument("--images", action=argparse.BooleanOptionalAction, default=None, help="extrai imagens dos PDFs (padrão: sim)")
+    conversao.add_argument("--image-text", action=argparse.BooleanOptionalAction, default=None,
+                           help="inclui o texto dentro de figuras e diagramas no Markdown (padrão: não)")
     conversao.add_argument("--wikilinks", action=argparse.BooleanOptionalAction, default=None,
                            help="usa wikilinks do Obsidian; --no-wikilinks gera links Markdown")
 
@@ -155,6 +157,7 @@ def main(argv: list[str] | None = None) -> int:
             include=tuple(args.include or cfg.get("include", ["*.pdf"])), exclude=tuple(args.exclude or cfg.get("exclude", [])),
             pages=parse_pages(choose(args, cfg, "pages")), dpi=dpi, size_limit=size,
             image_format=choose(args, cfg, "image_format", "png"), no_images=not bool(choose(args, cfg, "images", not cfg.get("no_images", False))),
+            image_text=bool(choose(args, cfg, "image_text", False)),
             wikilinks=bool(choose(args, cfg, "wikilinks", True)),
             collision=choose(args, cfg, "collision", "overwrite" if cfg.get("overwrite") else "skip"),
             frontmatter=bool(choose(args, cfg, "frontmatter", True) or tags or args.property), tags=tags,

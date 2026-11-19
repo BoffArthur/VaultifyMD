@@ -18,6 +18,7 @@ dpi = 150
 size_limit = 0.05
 image_format = "png"
 images = true
+image_text = false
 wikilinks = true
 frontmatter = true
 tags = ["pdf"]
