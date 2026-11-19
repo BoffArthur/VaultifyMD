@@ -2,6 +2,11 @@
 
 Converte PDFs em Markdown pronto para Obsidian, com imagens, Wikilinks, frontmatter, processamento em lote e configuração TOML.
 
+## Versão 0.2.2
+
+- Anexos em `<saída>/<nome do arquivo>/` e wikilinks `![[<nome do arquivo>/<imagem>]]`, com o Markdown direto na saída.
+- Política de colisão reduzida a `skip` (padrão), `overwrite` e `duplicate`; a pasta de anexos acompanha o nome final da nota.
+
 ## Versão 0.2.1
 
 Correção: a CLI não iniciava no Python 3.14 por causa de `--no-images` e `--no-wikilinks`.
