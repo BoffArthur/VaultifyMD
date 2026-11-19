@@ -11,47 +11,76 @@ from .core import Options, convert_many, discover, parse_pages, parse_properties
 
 
 def parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="vaultifymd", description="PDF para Markdown pronto para Obsidian.")
-    p.add_argument("inputs", nargs="*", metavar="INPUT", help="Arquivos PDF ou diretórios")
-    p.add_argument("--init-config", nargs="?", const=DEFAULT_NAME, metavar="PATH")
-    p.add_argument("--force", action="store_true", help="Sobrescreve configuração no init")
-    p.add_argument("--config", type=Path, help="Arquivo TOML; padrão: ./vaultifymd.toml")
-    p.add_argument("--vault", type=Path)
-    p.add_argument("-o", "--output", type=Path)
-    p.add_argument("-i", "--img-dir", "--attachments-dir", dest="attachments_dir", type=Path)
-    p.add_argument("-r", "--recursive", action=argparse.BooleanOptionalAction, default=None)
-    p.add_argument("--preserve-tree", action=argparse.BooleanOptionalAction, default=None)
-    p.add_argument("--root", type=Path, help="Raiz usada para preservar a árvore")
-    p.add_argument("--include", action="append", help="Glob incluído; repetível")
-    p.add_argument("--exclude", action="append", help="Glob excluído; repetível")
-    policy = p.add_mutually_exclusive_group()
+    p = argparse.ArgumentParser(
+        prog="vaultifymd",
+        usage="%(prog)s [opções] INPUT [INPUT ...]",
+        description="PDF para Markdown pronto para Obsidian.",
+        formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=32),
+        add_help=False,
+    )
+
+    ajuda = p.add_argument_group("Ajuda")
+    ajuda.add_argument("-h", "--help", action="help", help="mostra esta ajuda e encerra")
+
+    entrada = p.add_argument_group("Entrada")
+    entrada.add_argument("inputs", nargs="*", metavar="INPUT", help="arquivos PDF ou pastas")
+    entrada.add_argument("-r", "--recursive", action=argparse.BooleanOptionalAction, default=None, help="busca PDFs em subpastas")
+    entrada.add_argument("--include", action="append", metavar="GLOB", help="inclui arquivos pelo padrão (repetível; padrão: *.pdf)")
+    entrada.add_argument("--exclude", action="append", metavar="GLOB", help="exclui arquivos pelo padrão (repetível)")
+    entrada.add_argument("--pages", metavar="LISTA", help="páginas a converter, ex.: 1-5,8")
+    entrada.add_argument("--preserve-tree", action=argparse.BooleanOptionalAction, default=None, help="mantém a estrutura de pastas na saída")
+    entrada.add_argument("--root", type=Path, metavar="PASTA", help="raiz usada para preservar a árvore")
+
+    saida = p.add_argument_group("Saída")
+    saida.add_argument("--vault", type=Path, metavar="PASTA", help="Vault do Obsidian; saída e anexos devem ficar dentro dele")
+    saida.add_argument("-o", "--output", type=Path, metavar="PASTA", help="pasta das notas (padrão: vaultifymd)")
+    saida.add_argument("-i", "--img-dir", "--attachments-dir", dest="attachments_dir", type=Path, metavar="PASTA",
+                       help="pasta dos anexos (padrão: a mesma da saída)")
+    policy = saida.add_mutually_exclusive_group()
     policy.add_argument("--collision", choices=["skip", "overwrite", "duplicate", "update"],
-                        help="Nota existente: ignorar, sobrescrever, duplicar (sufixo -2, -3...) ou atualizar se o PDF for mais novo")
+                        help="nota existente: skip (ignorar, padrão), overwrite, duplicate (sufixo -2, -3...) "
+                             "ou update (só se o PDF for mais novo)")
     policy.add_argument("--overwrite", dest="collision", action="store_const", const="overwrite", help=argparse.SUPPRESS)
     policy.add_argument("--skip-existing", dest="collision", action="store_const", const="skip", help=argparse.SUPPRESS)
-    p.add_argument("--pages")
-    p.add_argument("--dpi", type=int)
-    p.add_argument("--size-limit", type=float)
-    p.add_argument("--image-format", choices=["png", "jpg"])
-    p.add_argument("--images", action=argparse.BooleanOptionalAction, default=None, help="Extrai imagens dos PDFs (padrão: sim)")
-    p.add_argument("--wikilinks", action=argparse.BooleanOptionalAction, default=None)
-    p.add_argument("--frontmatter", action=argparse.BooleanOptionalAction, default=None)
-    p.add_argument("--tags", help="Tags separadas por vírgula")
-    p.add_argument("--property", action="append", default=[], metavar="KEY=VALUE")
-    p.add_argument("--title-from", choices=["filename", "metadata", "first-heading"])
-    p.add_argument("--copy-pdf", action=argparse.BooleanOptionalAction, default=None)
-    p.add_argument("--embed-pdf", action=argparse.BooleanOptionalAction, default=None)
-    p.add_argument("--source-link", action=argparse.BooleanOptionalAction, default=None)
-    p.add_argument("--page-separator", metavar="TEXT")
-    p.add_argument("--workers", type=int)
-    p.add_argument("--page-workers", type=int, help="Processos paralelos por PDF, cada um com um lote de páginas")
-    p.add_argument("--dry-run", action="store_true", default=None)
-    verbosity = p.add_mutually_exclusive_group()
-    verbosity.add_argument("-q", "--quiet", action="store_true")
-    verbosity.add_argument("-v", "--verbose", action="store_true")
-    p.add_argument("--log-file", type=Path)
-    p.add_argument("--json", action="store_true", help="Emite resumo JSON")
-    p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+
+    conversao = p.add_argument_group("Conversão")
+    conversao.add_argument("--dpi", type=int, metavar="N", help="resolução de renderização (36–1200, padrão: 150)")
+    conversao.add_argument("--size-limit", type=float, metavar="F", help="tamanho mínimo de imagem como fração da página (0–1, padrão: 0.05)")
+    conversao.add_argument("--image-format", choices=["png", "jpg"], help="formato das imagens extraídas")
+    conversao.add_argument("--images", action=argparse.BooleanOptionalAction, default=None, help="extrai imagens dos PDFs (padrão: sim)")
+    conversao.add_argument("--wikilinks", action=argparse.BooleanOptionalAction, default=None,
+                           help="usa wikilinks do Obsidian; --no-wikilinks gera links Markdown")
+
+    conteudo = p.add_argument_group("Conteúdo")
+    conteudo.add_argument("--frontmatter", action=argparse.BooleanOptionalAction, default=None, help="adiciona frontmatter YAML")
+    conteudo.add_argument("--title-from", choices=["filename", "metadata", "first-heading"], help="origem do título (padrão: filename)")
+    conteudo.add_argument("--tags", metavar="TAGS", help="tags separadas por vírgula")
+    conteudo.add_argument("--property", action="append", default=[], metavar="CHAVE=VALOR",
+                          help="propriedade personalizada no frontmatter (repetível)")
+    conteudo.add_argument("--copy-pdf", action=argparse.BooleanOptionalAction, default=None, help="copia o PDF para a pasta de anexos")
+    conteudo.add_argument("--embed-pdf", action=argparse.BooleanOptionalAction, default=None, help="incorpora o PDF na nota")
+    conteudo.add_argument("--source-link", action=argparse.BooleanOptionalAction, default=None, help="inclui link para o PDF original")
+    conteudo.add_argument("--page-separator", metavar="TEXTO", help="separador entre páginas (padrão: **Página N**)")
+
+    desempenho = p.add_argument_group("Desempenho")
+    desempenho.add_argument("--workers", type=int, metavar="N", help="PDFs processados em paralelo (1–32)")
+    desempenho.add_argument("--page-workers", type=int, metavar="N",
+                            help="processos paralelos por PDF, cada um com um lote de páginas (1–16, padrão: 4)")
+
+    execucao = p.add_argument_group("Execução e log")
+    execucao.add_argument("--dry-run", action="store_true", default=None, help="mostra o que seria feito, sem gravar arquivos")
+    verbosity = execucao.add_mutually_exclusive_group()
+    verbosity.add_argument("-q", "--quiet", action="store_true", help="mostra apenas erros")
+    verbosity.add_argument("-v", "--verbose", action="store_true", help="mostra detalhes de depuração")
+    execucao.add_argument("--log-file", type=Path, metavar="ARQUIVO", help="grava log em arquivo")
+    execucao.add_argument("--json", action="store_true", help="emite resumo em JSON")
+    execucao.add_argument("--version", action="version", version=f"%(prog)s {__version__}", help="mostra a versão e encerra")
+
+    configuracao = p.add_argument_group("Configuração")
+    configuracao.add_argument("--init-config", nargs="?", const=DEFAULT_NAME, metavar="ARQUIVO",
+                              help=f"cria o TOML de configuração (padrão: {DEFAULT_NAME}) e encerra")
+    configuracao.add_argument("--force", action="store_true", help="sobrescreve a configuração existente no --init-config")
+    configuracao.add_argument("--config", type=Path, metavar="ARQUIVO", help="arquivo TOML (padrão: ./vaultifymd.toml)")
     return p
 
 
